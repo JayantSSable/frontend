@@ -23,7 +23,7 @@ const LandingPage = () => {
       </Row>
       
       <Row className="mb-5">
-        <Col md={6} lg={3} className="mb-4">
+        <Col md={6} lg={4} className="mb-4">
           <Card className="h-100 shadow-sm text-center">
             <Card.Body>
               <FontAwesomeIcon icon={faHospital} size="3x" className="text-primary mb-3" />
@@ -36,20 +36,7 @@ const LandingPage = () => {
           </Card>
         </Col>
         
-        <Col md={6} lg={3} className="mb-4">
-          <Card className="h-100 shadow-sm text-center">
-            <Card.Body>
-              <FontAwesomeIcon icon={faQrcode} size="3x" className="text-success mb-3" />
-              <Card.Title>QR Code Registration</Card.Title>
-              <Card.Text>
-                Scan QR codes to join queues quickly and easily
-              </Card.Text>
-              <Link to="/join-queue/TEST001" className="btn btn-outline-success">Join Test Queue</Link>
-            </Card.Body>
-          </Card>
-        </Col>
-        
-        <Col md={6} lg={3} className="mb-4">
+        <Col md={6} lg={4} className="mb-4">
           <Card className="h-100 shadow-sm text-center">
             <Card.Body>
               <FontAwesomeIcon icon={faUserMd} size="3x" className="text-info mb-3" />
@@ -62,7 +49,7 @@ const LandingPage = () => {
           </Card>
         </Col>
         
-        <Col md={6} lg={3} className="mb-4">
+        <Col md={6} lg={4} className="mb-4">
           <Card className="h-100 shadow-sm text-center">
             <Card.Body>
               <FontAwesomeIcon icon={faUsers} size="3x" className="text-warning mb-3" />
