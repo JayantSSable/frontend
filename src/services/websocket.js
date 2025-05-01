@@ -2,9 +2,16 @@ import SockJS from 'sockjs-client';
 import { Stomp } from '@stomp/stompjs';
 
 // Use environment variable for WebSocket URL in production, fallback to localhost for development
-const SOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL 
-  ? process.env.REACT_APP_WEBSOCKET_URL 
-  : 'http://localhost:8080/ws';
+let socketUrl = '';
+
+if (process.env.REACT_APP_WEBSOCKET_URL) {
+  // Remove any markdown formatting that might be in the environment variable
+  socketUrl = process.env.REACT_APP_WEBSOCKET_URL.replace(/\[|\]\(.*?\)/g, '');
+} else {
+  socketUrl = 'http://localhost:8080/ws';
+}
+
+const SOCKET_URL = socketUrl;
 
 console.log('Using WebSocket URL:', SOCKET_URL);
 
