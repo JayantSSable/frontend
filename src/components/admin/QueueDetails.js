@@ -263,7 +263,7 @@ const QueueDetails = () => {
                   />
                 ) : (
                   <QRCodeSVG 
-                    value={`http://localhost:3000/join-queue/${queueDetails.qrCodeId}`} 
+                    value={`${window.location.origin}/join-queue/${queueDetails.qrCodeId}`} 
                     size={200} 
                     level="H" 
                   />
@@ -279,7 +279,7 @@ const QueueDetails = () => {
                     // Check if we have a valid QR code ID
                     if (queueDetails.qrCodeId && queueDetails.qrCodeId !== 'undefined') {
                       // Use the existing QR code ID
-                      const url = `http://localhost:3000/join-queue/${queueDetails.qrCodeId}`;
+                      const url = `${window.location.origin}/join-queue/${queueDetails.qrCodeId}`;
                       console.log('Using existing QR code ID for registration:', queueDetails.qrCodeId);
                       window.open(url, '_blank');
                     } else {
@@ -287,7 +287,7 @@ const QueueDetails = () => {
                       // Format: direct-{queueId} - this will be handled specially in the registration component
                       const directId = `direct-${queueDetails.id}`;
                       console.log('Using direct queue ID for registration:', directId);
-                      const url = `http://localhost:3000/join-queue/${directId}`;
+                      const url = `${window.location.origin}/join-queue/${directId}`;
                       window.open(url, '_blank');
                     }
                   }}

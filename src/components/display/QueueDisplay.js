@@ -185,7 +185,7 @@ const QueueDisplay = () => {
                   />
                 ) : (
                   <QRCodeSVG 
-                    value={`http://localhost:3000/join-queue/${queueDetails.qrCodeId}`} 
+                    value={`${window.location.origin}/join-queue/${queueDetails.qrCodeId}`} 
                     size={200} 
                     level="H" 
                   />
@@ -193,7 +193,7 @@ const QueueDisplay = () => {
               </div>
               <p className="mb-0 small">
                 Or visit: <br />
-                <strong>http://localhost:3000/join-queue/{queueDetails.qrCodeId}</strong>
+                <strong>{window.location.origin}/join-queue/{queueDetails.qrCodeId}</strong>
               </p>
             </Card.Body>
           </Card>
