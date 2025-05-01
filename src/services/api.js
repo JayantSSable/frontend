@@ -1,7 +1,11 @@
 import axios from 'axios';
 
-// Backend is always on port 8080, regardless of frontend port
-const API_BASE_URL = 'http://localhost:8080/api';
+// Use environment variable for API URL in production, fallback to localhost for development
+const API_BASE_URL = process.env.REACT_APP_API_URL 
+  ? `${process.env.REACT_APP_API_URL}/api`
+  : 'http://localhost:8080/api';
+
+console.log('Using API URL:', API_BASE_URL);
 
 // Create axios instance with enhanced configuration
 const api = axios.create({

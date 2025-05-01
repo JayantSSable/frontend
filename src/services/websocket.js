@@ -1,10 +1,12 @@
 import SockJS from 'sockjs-client';
 import { Stomp } from '@stomp/stompjs';
 
-// Always use the backend server port (8080) for WebSocket connections
-// The frontend port may change, but backend is always on 8080
-const BACKEND_PORT = '8080';
-const SOCKET_URL = `http://localhost:${BACKEND_PORT}/ws`;
+// Use environment variable for WebSocket URL in production, fallback to localhost for development
+const SOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL 
+  ? process.env.REACT_APP_WEBSOCKET_URL 
+  : 'http://localhost:8080/ws';
+
+console.log('Using WebSocket URL:', SOCKET_URL);
 
 class WebSocketService {
   constructor() {
