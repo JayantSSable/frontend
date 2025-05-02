@@ -7,14 +7,27 @@ import './App.css';
 import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import AdminDashboard from './components/admin/AdminDashboard';
+
+// Hospital Components
+import HospitalList from './components/admin/HospitalList';
+import HospitalForm from './components/admin/HospitalForm';
+import HospitalDetails from './components/admin/HospitalDetails';
+
+// Department Components
 import DepartmentList from './components/admin/DepartmentList';
 import DepartmentForm from './components/admin/DepartmentForm';
+
+// Queue Components
 import QueueList from './components/admin/QueueList';
 import QueueForm from './components/admin/QueueForm';
 import QueueDetails from './components/admin/QueueDetails';
+
+// Patient Components
 import PatientRegistration from './components/patient/PatientRegistration';
 import PatientStatus from './components/patient/PatientStatus';
 import PatientStatusTracker from './components/patient/PatientStatusTracker';
+
+// Display Components
 import QueueDisplay from './components/display/QueueDisplay';
 
 // Services
@@ -50,9 +63,20 @@ function App() {
           <Routes>
             {/* Admin Routes */}
             <Route path="/admin" element={<AdminDashboard />} />
+            
+            {/* Hospital Routes */}
+            <Route path="/admin/hospitals" element={<HospitalList />} />
+            <Route path="/admin/hospitals/new" element={<HospitalForm />} />
+            <Route path="/admin/hospitals/:id" element={<HospitalDetails />} />
+            <Route path="/admin/hospitals/:id/edit" element={<HospitalForm />} />
+            <Route path="/admin/hospitals/:hospitalId/departments/new" element={<DepartmentForm />} />
+            
+            {/* Department Routes */}
             <Route path="/admin/departments" element={<DepartmentList />} />
             <Route path="/admin/departments/new" element={<DepartmentForm />} />
             <Route path="/admin/departments/edit/:id" element={<DepartmentForm />} />
+            
+            {/* Queue Routes */}
             <Route path="/admin/queues" element={<QueueList />} />
             <Route path="/admin/queues/new" element={<QueueForm />} />
             <Route path="/admin/queues/edit/:id" element={<QueueForm />} />

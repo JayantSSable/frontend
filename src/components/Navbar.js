@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Navbar as BootstrapNavbar, Nav, Container } from 'react-bootstrap';
+import { Navbar as BootstrapNavbar, Nav, Container, NavDropdown } from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faHospital, faBuilding, faQrcode, faTachometerAlt } from '@fortawesome/free-solid-svg-icons';
 
 const Navbar = () => {
   const location = useLocation();
@@ -24,13 +26,19 @@ const Navbar = () => {
           {showAdminNav ? (
             <Nav className="me-auto">
               <Nav.Link as={Link} to="/admin" className={location.pathname === '/admin' ? 'active' : ''}>
-                Dashboard
+                <FontAwesomeIcon icon={faTachometerAlt} className="me-1" /> Dashboard
               </Nav.Link>
+              
+              <Nav.Link as={Link} to="/admin/hospitals" className={location.pathname.includes('/admin/hospitals') ? 'active' : ''}>
+                <FontAwesomeIcon icon={faHospital} className="me-1" /> Hospitals
+              </Nav.Link>
+              
               <Nav.Link as={Link} to="/admin/departments" className={location.pathname.includes('/admin/departments') ? 'active' : ''}>
-                Departments
+                <FontAwesomeIcon icon={faBuilding} className="me-1" /> Departments
               </Nav.Link>
+              
               <Nav.Link as={Link} to="/admin/queues" className={location.pathname.includes('/admin/queues') ? 'active' : ''}>
-                Queues
+                <FontAwesomeIcon icon={faQrcode} className="me-1" /> Queues
               </Nav.Link>
             </Nav>
           ) : (

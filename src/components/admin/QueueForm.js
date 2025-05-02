@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Button, Card, Alert } from 'react-bootstrap';
-import { getQueueDetails, createQueue, updateQueue, getDepartments } from '../../services/api';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Form, Button, Card, Alert, Container, Row, Col, Spinner } from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSave, faArrowLeft, faQrcode } from '@fortawesome/free-solid-svg-icons';
+import { getQueueDetails, createQueue, updateQueue } from '../../services/api';
+import { getHospitals, getDepartmentsByHospital } from '../../services/hospitalService';
 
 const QueueForm = () => {
   const { id } = useParams();
@@ -11,21 +14,25 @@ const QueueForm = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    departmentId: ''
+    departmentId: '',
+    hospitalId: ''
   });
+  const [hospitals, setHospitals] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [error, setError] = useState(null);
   const [validated, setValidated] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
       try {
         setLoading(true);
         
-        // Fetch departments
-        const departmentsResponse = await getDepartments();
-        setDepartments(departmentsResponse.data);
+        // Fetch hospitals
+        const hospitalsResponse = await getHospitals();
+        setHospitals(hospitalsResponse.data);
         
         // If in edit mode, fetch queue details
         if (isEditMode) {
@@ -37,17 +44,27 @@ const QueueForm = () => {
             return;
           }
           const queueResponse = await getQueueDetails(queueId);
+          
+          // Get the department to find its hospital
+          const departmentsResponse = await getDepartmentsByHospital(queueResponse.data.department.hospitalId);
+          setDepartments(departmentsResponse.data);
+          
           setFormData({
             name: queueResponse.data.name,
             description: queueResponse.data.description,
-            departmentId: queueResponse.data.departmentId
+            departmentId: queueResponse.data.departmentId,
+            hospitalId: queueResponse.data.department.hospitalId
           });
-        } else if (departmentsResponse.data.length > 0) {
-          // Set default department if creating new queue
+        } else if (hospitalsResponse.data.length > 0) {
+          // Set default hospital if creating new queue
+          const defaultHospitalId = hospitalsResponse.data[0].id;
           setFormData(prevState => ({
             ...prevState,
-            departmentId: departmentsResponse.data[0].id
+            hospitalId: defaultHospitalId
           }));
+          
+          // Fetch departments for the default hospital
+          await fetchDepartmentsForHospital(defaultHospitalId);
         }
         
         setLoading(false);
@@ -58,14 +75,51 @@ const QueueForm = () => {
       }
     };
 
-    fetchData();
+    fetchInitialData();
   }, [id, isEditMode]);
+  
+  const fetchDepartmentsForHospital = async (hospitalId) => {
+    if (!hospitalId) {
+      setDepartments([]);
+      return;
+    }
+    
+    try {
+      setLoadingDepartments(true);
+      const response = await getDepartmentsByHospital(hospitalId);
+      setDepartments(response.data);
+      
+      // If departments exist, set the first one as default
+      if (response.data.length > 0) {
+        setFormData(prevState => ({
+          ...prevState,
+          departmentId: response.data[0].id
+        }));
+      } else {
+        setFormData(prevState => ({
+          ...prevState,
+          departmentId: ''
+        }));
+      }
+      
+      setLoadingDepartments(false);
+    } catch (err) {
+      console.error('Error fetching departments:', err);
+      setLoadingDepartments(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Handle special case for hospitalId to fetch departments
+    if (name === 'hospitalId' && value) {
+      fetchDepartmentsForHospital(value);
+    }
+    
     setFormData(prevState => ({
       ...prevState,
-      [name]: name === 'departmentId' ? parseInt(value, 10) : value
+      [name]: (name === 'departmentId' || name === 'hospitalId') ? parseInt(value, 10) : value
     }));
   };
 
@@ -80,7 +134,7 @@ const QueueForm = () => {
     }
 
     try {
-      setLoading(true);
+      setSaving(true);
       let createdQueueId;
       
       if (isEditMode) {
@@ -95,8 +149,6 @@ const QueueForm = () => {
         // Add a small delay to ensure the queue is properly saved in the database
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
-      setLoading(false);
       
       // Navigate to the queue details page with the queue ID
       if (createdQueueId) {
@@ -116,49 +168,135 @@ const QueueForm = () => {
       }
       
       setError(errorMessage);
-      setLoading(false);
+      setSaving(false);
       console.error(`Error ${isEditMode ? 'updating' : 'creating'} queue:`, err);
     }
   };
 
-  if (loading && isEditMode) {
-    return <div className="text-center mt-5">Loading queue data...</div>;
+  if (loading) {
+    return (
+      <Container className="d-flex justify-content-center mt-5">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </Container>
+    );
   }
 
   return (
-    <div>
-      <h1>{isEditMode ? 'Edit Queue' : 'Create Queue'}</h1>
+    <Container className="mt-4">
+      <Row className="mb-4">
+        <Col>
+          <h2>
+            <FontAwesomeIcon icon={faQrcode} className="me-2" />
+            {isEditMode ? 'Edit Queue' : 'Add New Queue'}
+          </h2>
+          <p className="text-muted">
+            {isEditMode 
+              ? 'Update queue information' 
+              : 'Create a new queue in the system'}
+          </p>
+        </Col>
+        <Col xs="auto" className="align-self-center">
+          <Button 
+            variant="outline-secondary" 
+            onClick={() => navigate('/admin/queues')}
+          >
+            <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
+            Back to Queues
+          </Button>
+        </Col>
+      </Row>
       
       {error && <Alert variant="danger">{error}</Alert>}
       
-      {departments.length === 0 ? (
+      {hospitals.length === 0 ? (
         <Alert variant="warning">
-          You need to create at least one department before creating a queue.
+          <h5>No Hospitals Available</h5>
+          <p>You need to create at least one hospital before creating a queue.</p>
           <div className="mt-2">
-            <Button 
-              variant="primary" 
-              onClick={() => navigate('/admin/departments/new')}
-            >
-              Create Department
-            </Button>
+            <Link to="/admin/hospitals/new" className="btn btn-primary">
+              Create Hospital
+            </Link>
           </div>
         </Alert>
       ) : (
-        <Card className="mt-3">
+        <Card>
           <Card.Body>
             <Form noValidate validated={validated} onSubmit={handleSubmit}>
-              <Form.Group className="mb-3" controlId="queueName">
-                <Form.Label>Queue Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Enter queue name"
-                  required
-                />
+              <Row className="mb-3">
+                <Form.Group as={Col} md="6" controlId="queueName">
+                  <Form.Label>Queue Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter queue name"
+                    required
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    Queue name is required.
+                  </Form.Control.Feedback>
+                </Form.Group>
+                
+                <Form.Group as={Col} md="6" controlId="hospitalId">
+                  <Form.Label>Hospital</Form.Label>
+                  <Form.Select
+                    name="hospitalId"
+                    value={formData.hospitalId}
+                    onChange={handleChange}
+                    required
+                    disabled={isEditMode}
+                  >
+                    <option value="">Select Hospital</option>
+                    {hospitals.map(hospital => (
+                      <option key={hospital.id} value={hospital.id}>
+                        {hospital.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Form.Control.Feedback type="invalid">
+                    Please select a hospital.
+                  </Form.Control.Feedback>
+                </Form.Group>
+              </Row>
+              
+              <Form.Group className="mb-3" controlId="departmentId">
+                <Form.Label>Department</Form.Label>
+                {loadingDepartments ? (
+                  <div className="d-flex align-items-center">
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    <span>Loading departments...</span>
+                  </div>
+                ) : (
+                  <Form.Select
+                    name="departmentId"
+                    value={formData.departmentId}
+                    onChange={handleChange}
+                    required
+                    disabled={!formData.hospitalId || loadingDepartments}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(department => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                )}
+                {departments.length === 0 && formData.hospitalId && !loadingDepartments && (
+                  <Alert variant="warning" className="mt-2 p-2">
+                    <small>
+                      No departments available for this hospital. 
+                      <Link to={`/admin/hospitals/${formData.hospitalId}/departments/new`}>
+                        Create a department
+                      </Link> first.
+                    </small>
+                  </Alert>
+                )}
                 <Form.Control.Feedback type="invalid">
-                  Queue name is required.
+                  Please select a department.
                 </Form.Control.Feedback>
               </Form.Group>
               
@@ -174,39 +312,44 @@ const QueueForm = () => {
                 />
               </Form.Group>
               
-              <Form.Group className="mb-3" controlId="departmentId">
-                <Form.Label>Department</Form.Label>
-                <Form.Select
-                  name="departmentId"
-                  value={formData.departmentId}
-                  onChange={handleChange}
-                  required
+              <div className="d-flex justify-content-end">
+                <Button 
+                  variant="secondary" 
+                  className="me-2"
+                  onClick={() => navigate('/admin/queues')}
                 >
-                  <option value="">Select Department</option>
-                  {departments.map(department => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Form.Control.Feedback type="invalid">
-                  Please select a department.
-                </Form.Control.Feedback>
-              </Form.Group>
-              
-              <div className="d-flex justify-content-between">
-                <Button variant="secondary" onClick={() => navigate('/admin/queues')}>
                   Cancel
                 </Button>
-                <Button variant="primary" type="submit" disabled={loading}>
-                  {loading ? 'Saving...' : 'Save Queue'}
+                <Button 
+                  variant="primary" 
+                  type="submit" 
+                  disabled={saving || departments.length === 0}
+                >
+                  {saving ? (
+                    <>
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                        className="me-2"
+                      />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faSave} className="me-2" />
+                      {isEditMode ? 'Update Queue' : 'Save Queue'}
+                    </>
+                  )}
                 </Button>
               </div>
             </Form>
           </Card.Body>
         </Card>
       )}
-    </div>
+    </Container>
   );
 };
 
