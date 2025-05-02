@@ -32,9 +32,37 @@ import QueueDisplay from './components/display/QueueDisplay';
 
 // Services
 import WebSocketService from './services/websocket';
+import { initializeApp } from 'firebase/app';
+import { getMessaging } from 'firebase/messaging';
 
 function App() {
   useEffect(() => {
+    // Initialize Firebase
+    try {
+      // Firebase configuration from environment variables
+      const firebaseConfig = {
+        apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+        authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.REACT_APP_FIREBASE_APP_ID
+      };
+
+      console.log('Initializing Firebase with config:', firebaseConfig);
+      
+      // Initialize Firebase and make it globally available
+      const app = initializeApp(firebaseConfig);
+      const messaging = getMessaging(app);
+      
+      // Make Firebase available globally
+      window.firebase = { app, messaging };
+      
+      console.log('Firebase initialized successfully and attached to window object');
+    } catch (error) {
+      console.error('Error initializing Firebase:', error);
+    }
+    
     // Connect to WebSocket when the app loads with better error handling
     const connectWebSocket = async () => {
       try {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, Alert, Container, Row, Col, ProgressBar, Badge, ListGroup, Button } from 'react-bootstrap';
+import { Card, Alert, Container, Row, Col, ProgressBar, Badge, ListGroup, Button, Toast, ToastContainer } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faUsers, faCheckCircle, faBell, faHourglass, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { getPatientById, getQueueDetails } from '../../services/api';
 import WebSocketService from '../../services/websocket';
+import { onMessageListener } from '../../services/firebase';
 
 const PatientStatus = () => {
   const { id } = useParams();
@@ -13,6 +14,8 @@ const PatientStatus = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [waitTime, setWaitTime] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [showToast, setShowToast] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -67,10 +70,31 @@ const PatientStatus = () => {
       fetchData();
     });
     
+    // Listen for Firebase Cloud Messaging notifications
+    const unsubscribeFromFCM = onMessageListener((payload) => {
+      console.log('Received FCM notification:', payload);
+      
+      // Show notification toast
+      if (payload.notification) {
+        setNotification({
+          title: payload.notification.title,
+          body: payload.notification.body,
+          data: payload.data
+        });
+        setShowToast(true);
+      }
+      
+      // Refresh data
+      fetchData();
+    });
+    
     return () => {
       // Unsubscribe when component unmounts
       if (patientSubscription) {
         WebSocketService.unsubscribe(`/topic/patient/${id}`);
+      }
+      if (unsubscribeFromFCM) {
+        unsubscribeFromFCM();
       }
     };
   }, [id]);
@@ -148,7 +172,26 @@ const PatientStatus = () => {
   }
 
   return (
-    <Container className="mt-5">
+    <Container className="py-5">
+      {/* Toast notification for FCM messages */}
+      <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1 }}>
+        <Toast 
+          onClose={() => setShowToast(false)} 
+          show={showToast} 
+          delay={8000} 
+          autohide 
+          bg="primary"
+          text="white"
+        >
+          <Toast.Header closeButton>
+            <FontAwesomeIcon icon={faBell} className="me-2" />
+            <strong className="me-auto">{notification?.title || 'Queue Update'}</strong>
+            <small>just now</small>
+          </Toast.Header>
+          <Toast.Body>{notification?.body || 'Your queue status has been updated'}</Toast.Body>
+        </Toast>
+      </ToastContainer>
+      
       <Row className="justify-content-center">
         <Col md={10} lg={8}>
           <Card className="shadow-sm">

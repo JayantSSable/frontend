@@ -72,4 +72,17 @@ export const registerToTestQueue = (data) => api.post('/registration/test', data
 export const updatePatientStatus = (id, status) => api.patch(`/patients/${id}/status`, { status });
 export const updatePatientQueuePosition = (id, queuePosition) => api.patch(`/patients/${id}/position`, { queuePosition });
 
+// Firebase Cloud Messaging API
+export const registerDeviceToken = (patientId, deviceToken) => {
+  console.log(`Registering device token for patient ${patientId}:`, deviceToken);
+  return api.post('/patients/device-token', {
+    patientId: patientId,
+    deviceToken: deviceToken
+  });
+};
+
+export const sendTestNotification = (patientId) => {
+  return api.post(`/patients/${patientId}/test-notification`);
+};
+
 export default api;

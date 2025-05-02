@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Container, Card, Row, Col, Badge, ProgressBar, Alert } from 'react-bootstrap';
+import { Container, Card, Row, Col, Badge, ProgressBar, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHourglass, faBell, faUser, faCheckCircle, faHospital, faUserMd } from '@fortawesome/free-solid-svg-icons';
 import { getPatientById } from '../../services/api';
 import PatientStatusNotification from './PatientStatusNotification';
 import WebSocketService from '../../services/websocket';
+import { onMessageListener } from '../../services/firebase';
 
 const PatientStatusTracker = () => {
   const { patientId } = useParams();
@@ -13,6 +14,8 @@ const PatientStatusTracker = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusUpdated, setStatusUpdated] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [showToast, setShowToast] = useState(false);
 
   const fetchPatientData = async () => {
     try {
@@ -49,11 +52,32 @@ const PatientStatusTracker = () => {
         setStatusUpdated(false);
       }, 5000);
     });
+    
+    // Listen for Firebase Cloud Messaging notifications
+    const unsubscribeFromFCM = onMessageListener((payload) => {
+      console.log('Received FCM notification:', payload);
+      
+      // Show notification toast
+      if (payload.notification) {
+        setNotification({
+          title: payload.notification.title,
+          body: payload.notification.body,
+          data: payload.data
+        });
+        setShowToast(true);
+      }
+      
+      // Refresh data
+      fetchPatientData();
+    });
 
     return () => {
       // Unsubscribe when component unmounts
       if (patientSubscription) {
         WebSocketService.unsubscribe(`/topic/patient/${patientId}`);
+      }
+      if (unsubscribeFromFCM) {
+        unsubscribeFromFCM();
       }
     };
   }, [patientId]);
@@ -147,6 +171,25 @@ const PatientStatusTracker = () => {
 
   return (
     <Container className="py-5">
+      {/* Toast notification for FCM messages */}
+      <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1 }}>
+        <Toast 
+          onClose={() => setShowToast(false)} 
+          show={showToast} 
+          delay={8000} 
+          autohide 
+          bg="primary"
+          text="white"
+        >
+          <Toast.Header closeButton>
+            <FontAwesomeIcon icon={faBell} className="me-2" />
+            <strong className="me-auto">{notification?.title || 'Queue Update'}</strong>
+            <small>just now</small>
+          </Toast.Header>
+          <Toast.Body>{notification?.body || 'Your queue status has been updated'}</Toast.Body>
+        </Toast>
+      </ToastContainer>
+      
       {/* Status notification component */}
       <PatientStatusNotification patientId={patientId} queueId={patient.queueId} />
       
