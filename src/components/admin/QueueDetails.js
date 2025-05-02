@@ -70,33 +70,36 @@ const QueueDetails = () => {
     }
   };
 
-  useEffect(() => {
-    // Initial fetch with retry mechanism
-    const fetchWithRetry = async (retries = 3, delay = 1000) => {
-      try {
-        await fetchQueueDetails();
-      } catch (error) {
-        if (retries > 0) {
-          console.log(`Retrying queue details fetch. Attempts remaining: ${retries}`);
-          setTimeout(() => fetchWithRetry(retries - 1, delay * 1.5), delay);
-        }
+  // Initial fetch with retry mechanism
+  const fetchWithRetry = async (retries = 3, delay = 1000) => {
+    try {
+      await fetchQueueDetails();
+    } catch (error) {
+      if (retries > 0) {
+        console.log(`Retrying queue details fetch. Attempts remaining: ${retries}`);
+        setTimeout(() => fetchWithRetry(retries - 1, delay * 1.5), delay);
       }
-    };
+    }
+  };
+
+  useEffect(() => {
+    console.log('QueueDetails component mounted, fetching initial data for queue:', id);
     
+    // Initial data fetch with retry
     fetchWithRetry();
 
     // Subscribe to queue updates via WebSocket
+    console.log(`Subscribing to WebSocket updates for queue ${id}`);
     const subscription = WebSocketService.subscribeToQueue(id, (data) => {
-      if (data === 'queue-updated') {
-        fetchQueueDetails();
-      } else {
-        // Handle patient status update notification
-        fetchQueueDetails();
-      }
+      console.log('Received queue update via WebSocket:', data);
+      
+      // Always fetch fresh data regardless of message type
+      fetchQueueDetails();
     });
 
     return () => {
       // Unsubscribe when component unmounts
+      console.log(`Unsubscribing from WebSocket updates for queue ${id}`);
       if (subscription) {
         WebSocketService.unsubscribe(`/topic/queue/${id}`);
       }

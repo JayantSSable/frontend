@@ -14,53 +14,66 @@ const PatientStatusTracker = () => {
   const [error, setError] = useState(null);
   const [statusUpdated, setStatusUpdated] = useState(false);
 
-  useEffect(() => {
-    const fetchPatientData = async () => {
-      try {
-        setLoading(true);
-        const response = await getPatientById(patientId);
-        setPatient(response.data);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching patient data:', err);
-        setError('Unable to load your status information. Please try again later.');
-        setLoading(false);
-      }
-    };
+  const fetchPatientData = async () => {
+    try {
+      setLoading(true);
+      const response = await getPatientById(patientId);
+      setPatient(response.data);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching patient data:', err);
+      setError('Unable to load your status information. Please try again later.');
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    // Initial data fetch
     fetchPatientData();
 
     // Connect to WebSocket for real-time updates
     WebSocketService.connect();
 
     // Subscribe to patient-specific updates
-    const patientSubscription = WebSocketService.subscribe(
-      `/topic/patient/${patientId}`,
-      (data) => {
-        console.log('Received patient update:', data);
-        // Update patient data with new information
-        setPatient(prevPatient => ({
-          ...prevPatient,
-          status: data.status,
-          queuePosition: data.queuePosition
-        }));
-        setStatusUpdated(true);
-        
-        // Reset status updated flag after 5 seconds
-        setTimeout(() => {
-          setStatusUpdated(false);
-        }, 5000);
-      }
-    );
+    const patientSubscription = WebSocketService.subscribeToPatient(patientId, (data) => {
+      console.log('Received patient update via WebSocket:', data);
+      
+      // Fetch fresh data instead of just updating state
+      fetchPatientData();
+      
+      // Show status updated notification
+      setStatusUpdated(true);
+      
+      // Reset status updated flag after 5 seconds
+      setTimeout(() => {
+        setStatusUpdated(false);
+      }, 5000);
+    });
 
     return () => {
-      // Unsubscribe and disconnect when component unmounts
+      // Unsubscribe when component unmounts
       if (patientSubscription) {
         WebSocketService.unsubscribe(`/topic/patient/${patientId}`);
       }
-      WebSocketService.disconnect();
     };
   }, [patientId]);
+  
+  // Separate useEffect for queue subscription
+  useEffect(() => {
+    if (!patient || !patient.queueId) return;
+    
+    console.log(`Subscribing to queue updates for queue ${patient.queueId}`);
+    const queueSubscription = WebSocketService.subscribeToQueue(patient.queueId, (data) => {
+      console.log('Received queue update via WebSocket:', data);
+      fetchPatientData();
+    });
+    
+    return () => {
+      if (queueSubscription) {
+        WebSocketService.unsubscribe(`/topic/queue/${patient.queueId}`);
+      }
+    };
+  }, [patient?.queueId]);
 
   const getStatusStep = (status) => {
     switch (status) {

@@ -58,31 +58,41 @@ const PatientStatus = () => {
   };
 
   useEffect(() => {
+    // Initial data fetch
     fetchData();
 
     // Subscribe to patient updates via WebSocket
     const patientSubscription = WebSocketService.subscribeToPatient(id, (data) => {
+      console.log('Received patient update via WebSocket:', data);
       fetchData();
     });
     
-    // Subscribe to queue updates via WebSocket
-    let queueSubscription = null;
-    if (patient && patient.queueId) {
-      queueSubscription = WebSocketService.subscribeToQueue(patient.queueId, (data) => {
-        fetchData();
-      });
-    }
-
     return () => {
       // Unsubscribe when component unmounts
       if (patientSubscription) {
         WebSocketService.unsubscribe(`/topic/patient/${id}`);
       }
-      if (queueSubscription && patient && patient.queueId) {
+    };
+  }, [id]);
+  
+  // Separate useEffect for queue subscription to avoid dependency issues
+  useEffect(() => {
+    // Only subscribe to queue updates if we have a queueId
+    if (!patient || !patient.queueId) return;
+    
+    console.log(`Subscribing to queue updates for queue ${patient.queueId}`);
+    const queueSubscription = WebSocketService.subscribeToQueue(patient.queueId, (data) => {
+      console.log('Received queue update via WebSocket:', data);
+      fetchData();
+    });
+    
+    return () => {
+      // Unsubscribe when component unmounts or queueId changes
+      if (queueSubscription) {
         WebSocketService.unsubscribe(`/topic/queue/${patient.queueId}`);
       }
     };
-  }, [id, patient?.queueId]);
+  }, [patient?.queueId]);
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -290,7 +300,7 @@ const PatientStatus = () => {
                   )}
                 </Card.Body>
                 <Card.Footer className="text-center">
-                  <Button variant="outline-primary" onClick={() => window.location.reload()} size="sm">
+                  <Button variant="outline-primary" onClick={fetchData} size="sm">
                     <FontAwesomeIcon icon={faSpinner} className="me-2" />
                     Refresh Queue Status
                   </Button>
