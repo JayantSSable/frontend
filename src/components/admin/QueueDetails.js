@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Card, Row, Col, Button, Table, Badge, Alert, Form, Modal, InputGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Card, Row, Col, Button, Table, Badge, Alert, Form, Modal, InputGroup, OverlayTrigger, Tooltip, Container, ProgressBar } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEdit, faArrowLeft, faCheckCircle, faUser, faUsers, faArrowUp, faArrowDown, faBell } from '@fortawesome/free-solid-svg-icons';
+import { faEdit, faArrowLeft, faCheckCircle, faUser, faUsers, faArrowUp, faArrowDown, faBell, faClock, faHospital, faQrcode, faClipboard, faUserClock, faPhone, faEnvelope } from '@fortawesome/free-solid-svg-icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { getQueueDetails, updatePatientStatus, updatePatientQueuePosition } from '../../services/api';
 import WebSocketService from '../../services/websocket';
@@ -119,7 +119,7 @@ const QueueDetails = () => {
       console.error('Error updating patient status:', err);
     }
   };
-  
+
   const handleMarkAsServed = async (patientId) => {
     handleStatusChange(patientId, 'SERVED');
   };
@@ -175,17 +175,15 @@ const QueueDetails = () => {
         return <Badge bg="secondary">Unknown</Badge>;
     }
   };
-
-  if (loading) {
-    return <div className="text-center mt-5">Loading queue details...</div>;
-  }
-
-  if (!queueDetails) {
-    return <Alert variant="danger">Queue not found or error loading data.</Alert>;
-  }
-
+  
+  // Calculate estimated wait time based on number of patients and average service time
+  const calculateEstimatedWaitTime = (position) => {
+    const avgServiceTime = 5; // Average minutes per patient
+    return position * avgServiceTime;
+  };
+  
   return (
-    <div className="container py-4">
+    <Container fluid className="py-4">
       {/* Position Update Modal */}
       <Modal show={showPositionModal} onHide={() => setShowPositionModal(false)}>
         <Modal.Header closeButton>
@@ -222,292 +220,379 @@ const QueueDetails = () => {
 
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
+          <h2 className="mb-1">
+            <FontAwesomeIcon icon={faClipboard} className="me-2 text-primary" />
+            {queueDetails?.name || 'Queue Details'}
+          </h2>
+          {queueDetails?.department && (
+            <p className="text-muted mb-0">
+              <FontAwesomeIcon icon={faHospital} className="me-2" />
+              {queueDetails.department.name} Department
+            </p>
+          )}
+        </div>
+        <div>
           <Link to="/admin/queues" className="btn btn-outline-secondary me-2">
             <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
             Back to Queues
           </Link>
-          <h1 className="d-inline-block">{queueDetails.name}</h1>
-        </div>
-        <Link to={`/admin/queues/edit/${id}`}>
-          <Button variant="primary">
+          <Link to={`/admin/queues/edit/${id}`} className="btn btn-primary">
             <FontAwesomeIcon icon={faEdit} className="me-2" />
             Edit Queue
-          </Button>
-        </Link>
+          </Link>
+        </div>
       </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
       {updateSuccess && <Alert variant="success">Patient status updated successfully!</Alert>}
 
-      <Row>
-        <Col md={4}>
-          <Card className="mb-4">
-            <Card.Body>
-              <Card.Title>Queue Information</Card.Title>
-              <Card.Text>
-                <strong>Department:</strong> {queueDetails.departmentName}<br />
-                <strong>Description:</strong> {queueDetails.description || 'No description'}<br />
-              </Card.Text>
-            </Card.Body>
-          </Card>
-
-          <Card className="mb-4">
-            <Card.Body className="text-center">
-              <Card.Title>QR Code</Card.Title>
-              <div className="my-3">
-                {queueDetails.qrCodeImage ? (
-                  <img 
-                    src={`data:image/png;base64,${queueDetails.qrCodeImage}`} 
-                    alt="Queue QR Code" 
-                    style={{ maxWidth: '100%' }} 
-                  />
-                ) : (
-                  <QRCodeSVG 
-                    value={`${window.location.origin}/join-queue/${queueDetails.qrCodeId}`} 
-                    size={200} 
-                    level="H" 
-                  />
-                )}
-              </div>
-              <Card.Text>
-                Scan this QR code to join the queue
-              </Card.Text>
-              <div className="d-grid">
-                <Button 
-                  variant="outline-primary"
-                  onClick={() => {
-                    // Check if we have a valid QR code ID
-                    if (queueDetails.qrCodeId && queueDetails.qrCodeId !== 'undefined') {
-                      // Use the existing QR code ID
-                      // Use hash routing to prevent redirect issues in production
-                      const url = `${window.location.origin}/#/join-queue/${queueDetails.qrCodeId}`;
-                      console.log('Using existing QR code ID for registration:', queueDetails.qrCodeId);
-                      console.log('Opening registration URL:', url);
-                      window.open(url, '_blank');
-                    } else {
-                      // Generate a direct queue ID based URL
-                      // Format: direct-{queueId} - this will be handled specially in the registration component
-                      const directId = `direct-${queueDetails.id}`;
-                      console.log('Using direct queue ID for registration:', directId);
-                      // Use hash routing to prevent redirect issues in production
-                      const url = `${window.location.origin}/#/join-queue/${directId}`;
-                      console.log('Opening registration URL:', url);
-                      window.open(url, '_blank');
-                    }
-                  }}
-                >
-                  Open Registration Page
-                </Button>
-              </div>
-            </Card.Body>
-          </Card>
-
-          <Card>
-            <Card.Body>
-              <Card.Title>Queue Statistics</Card.Title>
-              <div className="d-flex justify-content-between my-3">
-                <div className="text-center">
-                  <div className="fs-1 fw-bold text-primary">
-                    {queueDetails.waitingPatients?.length || 0}
+      {loading ? (
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="mt-3">Loading queue details...</p>
+        </div>
+      ) : queueDetails ? (
+        <Row>
+          <Col lg={4}>
+            {/* Queue Stats Card */}
+            <Card className="mb-4">
+              <Card.Header className="bg-primary text-white">
+                <FontAwesomeIcon icon={faUsers} className="me-2" />
+                Queue Statistics
+              </Card.Header>
+              <Card.Body>
+                <Row className="text-center mb-4">
+                  <Col xs={4}>
+                    <div className="queue-stat-circle bg-secondary">
+                      <h3>{queueDetails.waitingPatients?.length || 0}</h3>
+                    </div>
+                    <p className="mt-2 mb-0">Waiting</p>
+                  </Col>
+                  <Col xs={4}>
+                    <div className="queue-stat-circle bg-primary">
+                      <h3>{queueDetails.servingPatients?.length || (queueDetails.currentPatient ? 1 : 0)}</h3>
+                    </div>
+                    <p className="mt-2 mb-0">Serving</p>
+                  </Col>
+                  <Col xs={4}>
+                    <div className="queue-stat-circle bg-success">
+                      <h3>{queueDetails.servedPatients?.length || 0}</h3>
+                    </div>
+                    <p className="mt-2 mb-0">Served</p>
+                  </Col>
+                </Row>
+                
+                <div className="mb-3">
+                  <p className="mb-1"><strong>Average Wait Time:</strong></p>
+                  <div className="d-flex align-items-center">
+                    <FontAwesomeIcon icon={faClock} className="me-2 text-warning" />
+                    <span>~{queueDetails.waitingPatients && queueDetails.waitingPatients.length > 0 ? calculateEstimatedWaitTime(1) : '0'} minutes per patient</span>
                   </div>
-                  <div>Waiting</div>
                 </div>
-                <div className="text-center">
-                  <div className="fs-1 fw-bold text-success">
-                    {queueDetails.servedPatients?.length || 0}
+                
+                <div className="mb-3">
+                  <p className="mb-1"><strong>Queue Status:</strong></p>
+                  <ProgressBar className="mb-2">
+                    <ProgressBar variant="secondary" now={queueDetails.waitingPatients?.length || 0} key={1} />
+                    <ProgressBar variant="primary" now={queueDetails.servingPatients?.length || (queueDetails.currentPatient ? 1 : 0)} key={2} />
+                    <ProgressBar variant="success" now={queueDetails.servedPatients?.length || 0} key={3} />
+                  </ProgressBar>
+                  <div className="d-flex justify-content-between small">
+                    <span>Created: {new Date(queueDetails.createdAt).toLocaleDateString()}</span>
+                    <span>Updated: {new Date(queueDetails.updatedAt).toLocaleDateString()}</span>
                   </div>
-                  <div>Served</div>
                 </div>
-                <div className="text-center">
-                  <div className="fs-1 fw-bold text-info">
-                    {(queueDetails.waitingPatients?.length || 0) + 
-                     (queueDetails.servedPatients?.length || 0) + 
-                     (queueDetails.currentPatient ? 1 : 0)}
-                  </div>
-                  <div>Total</div>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
+                
+                <hr />
+                
+                <p className="text-muted">{queueDetails.description}</p>
+              </Card.Body>
+            </Card>
 
-        <Col md={8}>
-          <Card className="mb-4">
-            <Card.Header className="bg-primary text-white">
-              <FontAwesomeIcon icon={faUser} className="me-2" />
-              Current Patient
-            </Card.Header>
-            <Card.Body>
-              {queueDetails.currentPatient ? (
-                <div>
-                  <Row className="align-items-center">
-                    <Col>
-                      <h5>{queueDetails.currentPatient.name}</h5>
-                      <p className="mb-0">
-                        <strong>Queue Position:</strong> {queueDetails.currentPatient.queuePosition}<br />
-                        <strong>Joined At:</strong> {new Date(queueDetails.currentPatient.joinedAt).toLocaleString()}<br />
-                        <strong>Status:</strong> {getStatusBadge(queueDetails.currentPatient.status)}
-                      </p>
-                    </Col>
-                    <Col xs="auto">
-                      <div className="d-flex gap-2">
-                        <OverlayTrigger
-                          placement="top"
-                          overlay={<Tooltip>Mark this patient as served</Tooltip>}
-                        >
-                          <Button 
-                            variant="success" 
-                            onClick={() => handleMarkAsServed(queueDetails.currentPatient.id)}
-                          >
-                            <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                            Mark as Served
-                          </Button>
-                        </OverlayTrigger>
-                        <PatientStatusDropdown 
-                          patient={queueDetails.currentPatient}
-                          onStatusChange={handleStatusChange}
-                        />
-                      </div>
-                    </Col>
-                  </Row>
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="mb-0">No patient is currently being served.</p>
-                  {queueDetails.waitingPatients && queueDetails.waitingPatients.length > 0 && (
-                    <Button 
-                      variant="primary" 
-                      className="mt-3"
-                      onClick={() => handleCallNext(queueDetails.waitingPatients[0].id)}
-                    >
-                      Call Next Patient
-                    </Button>
+            {/* QR Code Card */}
+            <Card className="mb-4">
+              <Card.Header className="bg-info text-white">
+                <FontAwesomeIcon icon={faQrcode} className="me-2" />
+                Queue Registration
+              </Card.Header>
+              <Card.Body className="text-center">
+                <div className="qr-container mb-3">
+                  {!queueDetails.qrCodeId || queueDetails.qrCodeId === 'undefined' ? (
+                    <div className="alert alert-warning">
+                      <FontAwesomeIcon icon={faQrcode} className="me-2" />
+                      No QR code has been generated for this queue yet. Edit the queue to generate one.
+                    </div>
+                  ) : (
+                    <QRCodeSVG 
+                      value={`${window.location.origin}/#/join-queue/${queueDetails.qrCodeId}`} 
+                      size={180} 
+                      level="H"
+                      className="pulse-animation"
+                    />
                   )}
                 </div>
-              )}
-            </Card.Body>
-          </Card>
+                <p className="mb-3">
+                  <FontAwesomeIcon icon={faUser} className="me-2 text-primary" />
+                  Scan this QR code to join the queue
+                </p>
+                <div className="d-grid">
+                  <Button 
+                    variant="outline-primary"
+                    onClick={() => {
+                      // Check if we have a valid QR code ID
+                      if (queueDetails.qrCodeId && queueDetails.qrCodeId !== 'undefined') {
+                        // Use the existing QR code ID
+                        // Use hash routing to prevent redirect issues in production
+                        const url = `${window.location.origin}/#/join-queue/${queueDetails.qrCodeId}`;
+                        console.log('Using existing QR code ID for registration:', queueDetails.qrCodeId);
+                        console.log('Opening registration URL:', url);
+                        window.open(url, '_blank');
+                      } else {
+                        // Generate a direct queue ID based URL
+                        // Format: direct-{queueId} - this will be handled specially in the registration component
+                        const directId = `direct-${queueDetails.id}`;
+                        console.log('Using direct queue ID for registration:', directId);
+                        // Use hash routing to prevent redirect issues in production
+                        const url = `${window.location.origin}/#/join-queue/${directId}`;
+                        console.log('Opening registration URL:', url);
+                        window.open(url, '_blank');
+                      }
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faUser} className="me-2" />
+                    Open Registration Page
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
 
-          <Card className="mb-4">
-            <Card.Header className="bg-secondary text-white">
-              <FontAwesomeIcon icon={faUsers} className="me-2" />
-              Waiting Patients
-            </Card.Header>
-            <Card.Body>
-              {queueDetails.waitingPatients && queueDetails.waitingPatients.length > 0 ? (
-                <Table striped hover responsive>
-                  <thead>
-                    <tr>
-                      <th>Position</th>
-                      <th>Name</th>
-                      <th>Joined At</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+          <Col lg={8}>
+            {/* Waiting Patients Card */}
+            <Card className="mb-4">
+              <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
+                <div>
+                  <FontAwesomeIcon icon={faUsers} className="me-2" />
+                  Waiting Patients
+                </div>
+                <Badge bg="light" text="dark" pill>
+                  {queueDetails.waitingPatients?.length || 0} Patients
+                </Badge>
+              </Card.Header>
+              <Card.Body>
+                {queueDetails.waitingPatients && queueDetails.waitingPatients.length > 0 ? (
+                  <div className="waiting-patients-container">
                     {queueDetails.waitingPatients.map((patient) => (
-                      <tr key={patient.id}>
-                        <td>{patient.queuePosition}</td>
-                        <td>{patient.name}</td>
-                        <td>{new Date(patient.joinedAt).toLocaleString()}</td>
-                        <td>{getStatusBadge(patient.status)}</td>
-                        <td>
-                          <div className="d-flex gap-2">
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip>Call this patient next</Tooltip>}
-                            >
-                              <Button 
-                                variant="primary" 
-                                size="sm"
-                                onClick={() => handleCallNext(patient.id)}
+                      <div 
+                        key={patient.id} 
+                        className={`queue-card mb-3 p-3 rounded ${patient.status ? `status-${patient.status.toLowerCase()}` : ''}`}
+                      >
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div className="d-flex align-items-center">
+                            <div className="queue-position">{patient.queuePosition}</div>
+                            <div>
+                              <h5 className="mb-0">{patient.name}</h5>
+                              <div className="d-flex align-items-center mt-1">
+                                <div className="me-3 small">
+                                  <FontAwesomeIcon icon={faClock} className="me-1 text-muted" />
+                                  <span>{new Date(patient.joinedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                </div>
+                                <div className="small">
+                                  <FontAwesomeIcon icon={faPhone} className="me-1 text-muted" />
+                                  <span>{patient.phoneNumber}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="d-flex align-items-center">
+                            {getStatusBadge(patient.status)}
+                            <div className="ms-3 d-flex gap-2">
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip>Call this patient next</Tooltip>}
                               >
-                                <FontAwesomeIcon icon={faUser} />
-                              </Button>
-                            </OverlayTrigger>
-                            
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip>Notify patient</Tooltip>}
-                            >
-                              <Button 
-                                variant="info" 
-                                size="sm"
-                                onClick={() => handleMarkAsNotified(patient.id)}
+                                <Button 
+                                  variant="primary" 
+                                  size="sm"
+                                  onClick={() => handleCallNext(patient.id)}
+                                >
+                                  <FontAwesomeIcon icon={faUser} />
+                                </Button>
+                              </OverlayTrigger>
+                              
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip>Notify patient</Tooltip>}
                               >
-                                <FontAwesomeIcon icon={faBell} />
-                              </Button>
-                            </OverlayTrigger>
-                            
+                                <Button 
+                                  variant="warning" 
+                                  size="sm"
+                                  onClick={() => handleMarkAsNotified(patient.id)}
+                                >
+                                  <FontAwesomeIcon icon={faBell} />
+                                </Button>
+                              </OverlayTrigger>
+                              
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip>Change position in queue</Tooltip>}
+                              >
+                                <Button 
+                                  variant="secondary" 
+                                  size="sm"
+                                  onClick={() => openPositionModal(patient)}
+                                >
+                                  <FontAwesomeIcon icon={faArrowUp} />
+                                </Button>
+                              </OverlayTrigger>
+                              
+                              <PatientStatusDropdown 
+                                patient={patient}
+                                onStatusChange={handleStatusChange}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-5">
+                    <FontAwesomeIcon icon={faUsers} className="text-muted mb-3" size="3x" />
+                    <h5>No patients are waiting in the queue</h5>
+                    <p className="text-muted">Patients will appear here once they join the queue</p>
+                    <Button 
+                      variant="primary"
+                      onClick={() => {
+                        const url = `${window.location.origin}/#/join-queue/${queueDetails.qrCodeId || `direct-${queueDetails.id}`}`;
+                        window.open(url, '_blank');
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faUser} className="me-2" />
+                      Add Test Patient
+                    </Button>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+
+            {/* Currently Serving Card */}
+            <Card>
+              <Card.Header className="bg-primary text-white">
+                <FontAwesomeIcon icon={faUser} className="me-2" />
+                Currently Serving
+              </Card.Header>
+              <Card.Body>
+                {/* Check both servingPatients (if available) and currentPatient */}
+                {((queueDetails.servingPatients && queueDetails.servingPatients.length > 0) || queueDetails.currentPatient) ? (
+                  <div className="currently-serving-container">
+                    {/* If servingPatients exists, use that, otherwise create an array with currentPatient */}
+                    {(queueDetails.servingPatients || (queueDetails.currentPatient ? [queueDetails.currentPatient] : [])).map((patient) => (
+                      <div key={patient.id} className="queue-card status-serving p-4 rounded">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div className="d-flex align-items-center">
+                            <div className="queue-position">{patient.queuePosition}</div>
+                            <div>
+                              <h4 className="mb-0">{patient.name}</h4>
+                              <div className="d-flex align-items-center mt-2">
+                                <div className="me-3">
+                                  <FontAwesomeIcon icon={faClock} className="me-1 text-muted" />
+                                  <span>Joined: {new Date(patient.joinedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                </div>
+                                <div>
+                                  <FontAwesomeIcon icon={faPhone} className="me-1 text-muted" />
+                                  <span>{patient.phoneNumber}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <Button 
+                              variant="success" 
+                              className="me-2"
+                              onClick={() => handleMarkAsServed(patient.id)}
+                            >
+                              <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                              Mark as Served
+                            </Button>
                             <OverlayTrigger
                               placement="top"
                               overlay={<Tooltip>Change position in queue</Tooltip>}
                             >
                               <Button 
                                 variant="secondary" 
-                                size="sm"
                                 onClick={() => openPositionModal(patient)}
                               >
                                 <FontAwesomeIcon icon={faArrowUp} />
                               </Button>
                             </OverlayTrigger>
-                            
-                            <PatientStatusDropdown 
-                              patient={patient}
-                              onStatusChange={handleStatusChange}
-                            />
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </Table>
-              ) : (
-                <div className="text-center py-3">
-                  <p className="mb-0">No patients are waiting in the queue.</p>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <FontAwesomeIcon icon={faUser} className="text-muted mb-2" size="2x" />
+                    <p className="mb-0">No patients are currently being served.</p>
+                    {queueDetails.waitingPatients && queueDetails.waitingPatients.length > 0 && (
+                      <Button 
+                        variant="primary" 
+                        className="mt-3"
+                        onClick={() => handleCallNext(queueDetails.waitingPatients[0].id)}
+                      >
+                        <FontAwesomeIcon icon={faUser} className="me-2" />
+                        Call Next Patient
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
 
-          <Card>
-            <Card.Header className="bg-success text-white">
-              <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-              Recently Served Patients
-            </Card.Header>
-            <Card.Body>
-              {queueDetails.servedPatients && queueDetails.servedPatients.length > 0 ? (
-                <Table striped hover responsive>
-                  <thead>
-                    <tr>
-                      <th>Position</th>
-                      <th>Name</th>
-                      <th>Joined At</th>
-                      <th>Served At</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+            {/* Recently Served Patients Card */}
+            <Card className="mt-4">
+              <Card.Header className="bg-success text-white">
+                <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                Recently Served
+              </Card.Header>
+              <Card.Body className="p-0">
+                {queueDetails.servedPatients && queueDetails.servedPatients.length > 0 ? (
+                  <div className="served-patients-list">
                     {queueDetails.servedPatients.slice(0, 5).map((patient) => (
-                      <tr key={patient.id}>
-                        <td>{patient.queuePosition}</td>
-                        <td>{patient.name}</td>
-                        <td>{new Date(patient.joinedAt).toLocaleString()}</td>
-                        <td>{patient.servedAt ? new Date(patient.servedAt).toLocaleString() : 'N/A'}</td>
-                      </tr>
+                      <div key={patient.id} className="served-patient-item">
+                        <div className="d-flex align-items-center p-3 border-bottom">
+                          <div className="queue-position">{patient.queuePosition}</div>
+                          <div>
+                            <h6 className="mb-0">{patient.name}</h6>
+                            <div className="d-flex align-items-center small text-muted">
+                              <FontAwesomeIcon icon={faUserClock} className="me-1" />
+                              <span>Served: {new Date(patient.servedAt || patient.joinedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </Table>
-              ) : (
-                <div className="text-center py-3">
-                  <p className="mb-0">No patients have been served yet.</p>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <FontAwesomeIcon icon={faCheckCircle} className="text-muted mb-2" size="2x" />
+                    <p className="mb-0">No patients have been served yet.</p>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      ) : (
+        <Alert variant="warning">
+          <FontAwesomeIcon icon={faClipboard} className="me-2" />
+          Queue not found or has been deleted.
+        </Alert>
+      )}
+    </Container>
   );
 };
 
