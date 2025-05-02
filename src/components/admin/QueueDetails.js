@@ -279,15 +279,19 @@ const QueueDetails = () => {
                     // Check if we have a valid QR code ID
                     if (queueDetails.qrCodeId && queueDetails.qrCodeId !== 'undefined') {
                       // Use the existing QR code ID
-                      const url = `${window.location.origin}/join-queue/${queueDetails.qrCodeId}`;
+                      // Use hash routing to prevent redirect issues in production
+                      const url = `${window.location.origin}/#/join-queue/${queueDetails.qrCodeId}`;
                       console.log('Using existing QR code ID for registration:', queueDetails.qrCodeId);
+                      console.log('Opening registration URL:', url);
                       window.open(url, '_blank');
                     } else {
                       // Generate a direct queue ID based URL
                       // Format: direct-{queueId} - this will be handled specially in the registration component
                       const directId = `direct-${queueDetails.id}`;
                       console.log('Using direct queue ID for registration:', directId);
-                      const url = `${window.location.origin}/join-queue/${directId}`;
+                      // Use hash routing to prevent redirect issues in production
+                      const url = `${window.location.origin}/#/join-queue/${directId}`;
+                      console.log('Opening registration URL:', url);
                       window.open(url, '_blank');
                     }
                   }}
