@@ -13,22 +13,22 @@ const getBackendUrl = () => {
     return 'http://localhost:8080';
   }
   
-  // In production, derive from the current window location
-  // This ensures we use the same domain as the frontend
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-  const host = window.location.host; // Includes domain and port if present
-  
-  return `${protocol}//${host}`;
+  // In production, use the explicit backend URL for Render.com
+  return 'https://hospital-queue-backend.onrender.com';
 };
 
 // Construct the complete WebSocket endpoint URL
 const SOCKET_URL = `${getBackendUrl()}/ws`;
 
-// Flag to disable WebSocket if it's causing issues
-const WEBSOCKET_ENABLED = true;
+// Set to false in production to disable WebSockets on Render.com
+// This will make the application use the fallback mechanism
+const isProduction = window.location.hostname.includes('render.com');
+const WEBSOCKET_ENABLED = !isProduction;
 
 console.log('Using WebSocket URL:', SOCKET_URL);
 console.log('WebSocket enabled:', WEBSOCKET_ENABLED);
+console.log('Environment:', process.env.NODE_ENV);
+console.log('Is production site:', isProduction);
 
 class WebSocketService {
   constructor() {
