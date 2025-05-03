@@ -199,6 +199,33 @@ body {
   box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
 }
 
+/* Tab Styling */
+.nav-tabs {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.nav-tabs .nav-link {
+  color: var(--text-color) !important; /* Override the white color */
+  background-color: #f8f9fa;
+  border: 1px solid transparent;
+  border-top-left-radius: 0.25rem;
+  border-top-right-radius: 0.25rem;
+  margin-right: 0.5rem;
+  font-weight: 500;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: var(--border-color) var(--border-color) transparent;
+  background-color: #fff;
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--primary-color) !important;
+  background-color: #fff;
+  border-color: var(--border-color) var(--border-color) #fff;
+  font-weight: 600;
+}
+
 .form-label {
   font-weight: 500;
   margin-bottom: 0.5rem;
