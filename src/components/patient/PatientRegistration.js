@@ -4,7 +4,7 @@ import { Container, Form, Button, Card, Alert, Row, Col } from 'react-bootstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBell, faQrcode, faUser } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
-import { registerPatient, registerDeviceToken } from '../../services/api';
+import api, { registerPatient, registerDeviceToken } from '../../services/api';
 import { requestNotificationPermission } from '../../services/firebase';
 
 const PatientRegistration = () => {
@@ -145,10 +145,10 @@ const PatientRegistration = () => {
             };
             console.log('Sending token registration data:', tokenRegistrationData);
             
-            const tokenResponse = await axios.post(
-              `${process.env.REACT_APP_API_BASE_URL}/api/patients/device-token`,
-              tokenRegistrationData,
-              { headers: { 'Content-Type': 'application/json' } }
+            // Use the centralized API service instead of direct axios call with hardcoded URL
+            const tokenResponse = await api.post(
+              `/patients/device-token`,
+              tokenRegistrationData
             );
             
             console.log('Device token registration response:', tokenResponse.data);
