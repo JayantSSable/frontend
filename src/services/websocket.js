@@ -1,19 +1,34 @@
 import SockJS from 'sockjs-client';
 import { Stomp } from '@stomp/stompjs';
 
-// Use environment variable for WebSocket URL in production, fallback to localhost for development
-let socketUrl = '';
+// Determine the backend URL based on the current environment
+const getBackendUrl = () => {
+  // Use environment variable if available
+  if (process.env.REACT_APP_BACKEND_URL) {
+    return process.env.REACT_APP_BACKEND_URL.replace(/\[|\]\(.*?\)/g, '');
+  }
+  
+  // In development, use localhost
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:8080';
+  }
+  
+  // In production, derive from the current window location
+  // This ensures we use the same domain as the frontend
+  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+  const host = window.location.host; // Includes domain and port if present
+  
+  return `${protocol}//${host}`;
+};
 
-if (process.env.REACT_APP_WEBSOCKET_URL) {
-  // Remove any markdown formatting that might be in the environment variable
-  socketUrl = process.env.REACT_APP_WEBSOCKET_URL.replace(/\[|\]\(.*?\)/g, '');
-} else {
-  socketUrl = 'http://localhost:8080/ws';
-}
+// Construct the complete WebSocket endpoint URL
+const SOCKET_URL = `${getBackendUrl()}/ws`;
 
-const SOCKET_URL = socketUrl;
+// Flag to disable WebSocket if it's causing issues
+const WEBSOCKET_ENABLED = true;
 
 console.log('Using WebSocket URL:', SOCKET_URL);
+console.log('WebSocket enabled:', WEBSOCKET_ENABLED);
 
 class WebSocketService {
   constructor() {
@@ -28,6 +43,15 @@ class WebSocketService {
   }
 
   connect(onConnected, onError) {
+    // If WebSockets are disabled, immediately resolve with a dummy connection
+    if (!WEBSOCKET_ENABLED) {
+      console.log('WebSockets are disabled. Using fallback mode.');
+      this.isConnected = false;
+      this.connectPromise = Promise.resolve();
+      if (onConnected) setTimeout(onConnected, 0);
+      return this.connectPromise;
+    }
+    
     // If we're already connecting, return the existing promise
     if (this.connectPromise) {
       return this.connectPromise;
@@ -42,8 +66,33 @@ class WebSocketService {
     // Create a new promise for the connection
     this.connectPromise = new Promise((resolve, reject) => {
       try {
-        console.log('Attempting to connect to WebSocket...');
-        const socket = new SockJS(SOCKET_URL);
+        console.log('Attempting to connect to WebSocket at:', SOCKET_URL);
+        
+        // Create SockJS instance with error handling
+        let socket;
+        try {
+          socket = new SockJS(SOCKET_URL);
+        } catch (sockError) {
+          console.error('SockJS initialization error:', sockError);
+          throw new Error(`Failed to initialize SockJS: ${sockError.message}`);
+        }
+        
+        // Add event listeners for socket-level errors
+        socket.onerror = (socketError) => {
+          console.error('SockJS socket error:', socketError);
+        };
+        
+        socket.onclose = (closeEvent) => {
+          if (!this.isConnected) return; // Ignore if we weren't connected
+          
+          console.warn(`WebSocket closed with code: ${closeEvent.code}, reason: ${closeEvent.reason || 'No reason provided'}`);
+          this.isConnected = false;
+          
+          // Only attempt reconnect if this wasn't a clean close
+          if (closeEvent.code !== 1000) {
+            this._scheduleReconnect(onConnected, onError);
+          }
+        };
         
         // Configure STOMP client
         this.stompClient = Stomp.over(socket);
@@ -51,10 +100,20 @@ class WebSocketService {
         // Disable debug logging by providing an empty function
         this.stompClient.debug = () => {};
         
-        // Connect to the WebSocket server
+        // Connect to the WebSocket server with timeout
+        const connectionTimeout = setTimeout(() => {
+          console.error('WebSocket connection timeout after 10 seconds');
+          socket.close();
+          this.isConnected = false;
+          this.connectPromise = null;
+          reject(new Error('Connection timeout'));
+          this._scheduleReconnect(onConnected, onError);
+        }, 10000); // 10 second timeout
+        
         this.stompClient.connect(
           {},
           () => {
+            clearTimeout(connectionTimeout);
             console.log('WebSocket connected successfully');
             this.isConnected = true;
             this.reconnectAttempts = 0;
@@ -66,6 +125,7 @@ class WebSocketService {
             resolve();
           },
           (error) => {
+            clearTimeout(connectionTimeout);
             console.error('WebSocket connection error:', error);
             this.isConnected = false;
             this.connectPromise = null;
@@ -73,19 +133,7 @@ class WebSocketService {
             if (onError) onError(error);
             reject(error);
             
-            // Try to reconnect with exponential backoff
-            this.reconnectAttempts++;
-            const delay = Math.min(30000, 1000 * Math.pow(2, this.reconnectAttempts));
-            
-            console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
-            
-            if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-              this.reconnectTimeout = setTimeout(() => {
-                this.connect(onConnected, onError);
-              }, delay);
-            } else {
-              console.error(`Maximum reconnect attempts (${this.maxReconnectAttempts}) reached. Giving up.`);
-            }
+            this._scheduleReconnect(onConnected, onError);
           }
         );
       } catch (e) {
@@ -96,6 +144,23 @@ class WebSocketService {
     });
     
     return this.connectPromise;
+  }
+  
+  // Helper method to schedule reconnection attempts
+  _scheduleReconnect(onConnected, onError) {
+    // Try to reconnect with exponential backoff
+    this.reconnectAttempts++;
+    const delay = Math.min(30000, 1000 * Math.pow(2, this.reconnectAttempts));
+    
+    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    
+    if (this.reconnectAttempts <= this.maxReconnectAttempts) {
+      this.reconnectTimeout = setTimeout(() => {
+        this.connect(onConnected, onError);
+      }, delay);
+    } else {
+      console.error(`Maximum reconnect attempts (${this.maxReconnectAttempts}) reached. Giving up.`);
+    }
   }
 
   disconnect() {
@@ -124,6 +189,20 @@ class WebSocketService {
   }
 
   subscribe(destination, callback) {
+    // If WebSockets are disabled, create a dummy subscription
+    if (!WEBSOCKET_ENABLED) {
+      console.log(`WebSockets disabled, creating dummy subscription for ${destination}`);
+      // Create a dummy subscription object that does nothing
+      const dummySubscription = {
+        id: `dummy-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        unsubscribe: () => {}
+      };
+      
+      // Store it so we don't try to subscribe again
+      this.subscriptions.set(destination, dummySubscription);
+      return dummySubscription;
+    }
+    
     // If already subscribed, return the existing subscription
     if (this.subscriptions.has(destination)) {
       return this.subscriptions.get(destination);
@@ -147,8 +226,15 @@ class WebSocketService {
       console.log(`Subscribing to ${destination}`);
       const subscription = this.stompClient.subscribe(destination, (message) => {
         try {
-          const payload = JSON.parse(message.body);
-          callback(payload);
+          // Try to parse as JSON first
+          try {
+            const payload = JSON.parse(message.body);
+            callback(payload);
+          } catch (jsonError) {
+            // If not valid JSON, pass the raw message body as a string
+            console.log(`Message is not JSON: ${message.body}`);
+            callback(message.body);
+          }
         } catch (e) {
           console.error(`Error processing message from ${destination}:`, e);
         }
