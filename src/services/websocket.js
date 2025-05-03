@@ -1,5 +1,5 @@
 import SockJS from 'sockjs-client';
-import { Stomp } from '@stomp/stompjs';
+import { Stomp, Client } from '@stomp/stompjs';
 
 // Determine the backend URL based on the current environment
 const getBackendUrl = () => {
@@ -65,74 +65,87 @@ class WebSocketService {
       try {
         console.log('Attempting to connect to WebSocket at:', SOCKET_URL);
         
-        // Create SockJS instance with error handling
-        let socket;
+        // Create a StompJS Client with proper configuration for auto-reconnect
         try {
-          socket = new SockJS(SOCKET_URL);
-        } catch (sockError) {
-          console.error('SockJS initialization error:', sockError);
-          throw new Error(`Failed to initialize SockJS: ${sockError.message}`);
-        }
-        
-        // Add event listeners for socket-level errors
-        socket.onerror = (socketError) => {
-          console.error('SockJS socket error:', socketError);
-        };
-        
-        socket.onclose = (closeEvent) => {
-          if (!this.isConnected) return; // Ignore if we weren't connected
+          // Create a factory function for SockJS
+          const socketFactory = () => {
+            return new SockJS(SOCKET_URL);
+          };
           
-          console.warn(`WebSocket closed with code: ${closeEvent.code}, reason: ${closeEvent.reason || 'No reason provided'}`);
-          this.isConnected = false;
+          // Create a new StompJS client
+          this.stompClient = new Client({
+            // Use the factory function for SockJS
+            webSocketFactory: socketFactory,
+            
+            // Configure reconnect parameters
+            reconnectDelay: 5000,         // Wait 5 seconds before attempting reconnect
+            heartbeatIncoming: 4000,      // Expect server heartbeat every 4 seconds
+            heartbeatOutgoing: 4000,      // Send heartbeat every 4 seconds
+            
+            // Disable debug logs
+            debug: () => {},
+            
+            // Configure connection timeout
+            connectionTimeout: 10000,     // 10 second timeout
+            
+            // Callbacks
+            onConnect: () => {
+              console.log('WebSocket connected successfully');
+              this.isConnected = true;
+              this.reconnectAttempts = 0;
+              
+              // Process any pending subscriptions
+              this.processPendingSubscriptions();
+              
+              if (onConnected) onConnected();
+              resolve();
+            },
+            
+            onStompError: (frame) => {
+              console.error('STOMP protocol error:', frame);
+              this.isConnected = false;
+              if (onError) onError(new Error(`STOMP error: ${frame.headers.message}`));
+            },
+            
+            onWebSocketClose: (closeEvent) => {
+              if (!this.isConnected) return; // Ignore if we weren't connected
+              
+              console.warn(`WebSocket closed with code: ${closeEvent.code}, reason: ${closeEvent.reason || 'No reason provided'}`);
+              this.isConnected = false;
+              
+              // Client will auto-reconnect thanks to the StompJS Client configuration
+            },
+            
+            onWebSocketError: (error) => {
+              console.error('WebSocket error:', error);
+            },
+            
+            onDisconnect: () => {
+              console.log('STOMP client disconnected');
+              this.isConnected = false;
+            }
+          });
           
-          // Only attempt reconnect if this wasn't a clean close
-          if (closeEvent.code !== 1000) {
-            this._scheduleReconnect(onConnected, onError);
-          }
-        };
-        
-        // Configure STOMP client
-        this.stompClient = Stomp.over(socket);
-        
-        // Disable debug logging by providing an empty function
-        this.stompClient.debug = () => {};
-        
-        // Connect to the WebSocket server with timeout
-        const connectionTimeout = setTimeout(() => {
-          console.error('WebSocket connection timeout after 10 seconds');
-          socket.close();
+          // Activate the client (starts the connection process)
+          this.stompClient.activate();
+          
+          // Set a timeout for the initial connection
+          const connectionTimeout = setTimeout(() => {
+            if (!this.isConnected) {
+              console.error('WebSocket connection timeout after 10 seconds');
+              this.connectPromise = null;
+              reject(new Error('Connection timeout'));
+              this._scheduleReconnect(onConnected, onError);
+            }
+          }, 10000); // 10 second timeout
+          
+        } catch (error) {
+          console.error('Error initializing STOMP client:', error);
           this.isConnected = false;
           this.connectPromise = null;
-          reject(new Error('Connection timeout'));
+          reject(error);
           this._scheduleReconnect(onConnected, onError);
-        }, 10000); // 10 second timeout
-        
-        this.stompClient.connect(
-          {},
-          () => {
-            clearTimeout(connectionTimeout);
-            console.log('WebSocket connected successfully');
-            this.isConnected = true;
-            this.reconnectAttempts = 0;
-            
-            // Process any pending subscriptions
-            this.processPendingSubscriptions();
-            
-            if (onConnected) onConnected();
-            resolve();
-          },
-          (error) => {
-            clearTimeout(connectionTimeout);
-            console.error('WebSocket connection error:', error);
-            this.isConnected = false;
-            this.connectPromise = null;
-            
-            if (onError) onError(error);
-            reject(error);
-            
-            this._scheduleReconnect(onConnected, onError);
-          }
-        );
+        }
       } catch (e) {
         console.error('Error creating WebSocket connection:', e);
         this.connectPromise = null;
@@ -170,19 +183,26 @@ class WebSocketService {
     // Reset connection promise
     this.connectPromise = null;
     
-    // Disconnect STOMP client if connected
-    if (this.stompClient && this.isConnected) {
+    // Disconnect STOMP client if it exists
+    if (this.stompClient) {
       try {
-        this.stompClient.disconnect();
+        // For the new StompJS Client, we use deactivate() instead of disconnect()
+        if (this.stompClient.deactivate) {
+          this.stompClient.deactivate();
+        } else if (this.stompClient.disconnect) {
+          // Fallback for older implementations
+          this.stompClient.disconnect();
+        }
         console.log('WebSocket disconnected');
       } catch (e) {
         console.error('Error disconnecting WebSocket:', e);
       }
-      
-      this.isConnected = false;
-      this.subscriptions.clear();
-      this.pendingSubscriptions = [];
     }
+    
+    // Reset state
+    this.isConnected = false;
+    this.subscriptions.clear();
+    this.pendingSubscriptions = [];
   }
 
   subscribe(destination, callback) {
