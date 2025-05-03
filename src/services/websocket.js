@@ -20,15 +20,12 @@ const getBackendUrl = () => {
 // Construct the complete WebSocket endpoint URL
 const SOCKET_URL = `${getBackendUrl()}/ws`;
 
-// Set to false in production to disable WebSockets on Render.com
-// This will make the application use the fallback mechanism
-const isProduction = window.location.hostname.includes('render.com');
-const WEBSOCKET_ENABLED = !isProduction;
+// Always enable WebSockets in all environments
+const WEBSOCKET_ENABLED = true;
 
 console.log('Using WebSocket URL:', SOCKET_URL);
 console.log('WebSocket enabled:', WEBSOCKET_ENABLED);
 console.log('Environment:', process.env.NODE_ENV);
-console.log('Is production site:', isProduction);
 
 class WebSocketService {
   constructor() {
